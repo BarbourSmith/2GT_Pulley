@@ -1,13 +1,88 @@
 {
-    "atomType": "Molecule",
-    "x": 0,
-    "y": 0,
-    "uniqueID": "id-761",
-    "name": "2GT_Pulley",
-    "topLevel": true,
-    "allAtoms": [],
-    "allConnectors": [],
-    "unitsKey": "MM",
-    "fileTypeVersion": 1,
-    "filetypeVersion": 1
+  "atomType": "Molecule",
+  "x": 0,
+  "y": 0,
+  "uniqueID": "id-761",
+  "name": "2GT_Pulley",
+  "ioValues": [
+    {
+      "name": "Number_of_Teeth",
+      "ioValue": 20,
+      "currentEquation": "20"
+    },
+    {
+      "name": "Height",
+      "ioValue": 5,
+      "currentEquation": "5"
+    }
+  ],
+  "topLevel": true,
+  "allAtoms": [
+    {
+      "atomType": "Output",
+      "x": 0.98,
+      "y": 0.5,
+      "uniqueID": "id-762",
+      "ioValues": [
+        {
+          "name": "number or geometry",
+          "ioValue": "__GEOMETRY_INPUT__"
+        }
+      ]
+    },
+    {
+      "atomType": "Code",
+      "x": 0.4212962962962963,
+      "y": 0.5376044568245125,
+      "uniqueID": "id-764",
+      "ioValues": [
+        {
+          "name": "numberOfTeeth",
+          "ioValue": 20
+        },
+        {
+          "name": "faceWidth",
+          "ioValue": 5,
+          "currentEquation": "6"
+        }
+      ],
+      "interpreterVersion": 1,
+      "code": "/**\n * 2GT (GT2) timing belt pulley.\n * Teeth point outward; profile is the complement of the GT2 belt tooth so\n * the belt's gaps mesh onto the pulley's tips. Uses Gates' standard PLD\n * offset (PD = OD + 0.254 mm) so the pulley meshes correctly with a real\n * 2GT belt.\n */\nfunction run(numberOfTeeth: number = 20, faceWidth: number = 6) {\n  const N = Math.max(8, Math.round(numberOfTeeth));\n  const pitch = 2.0;     // GT2 tooth pitch\n  const toothWidth = 1.15;    // chord width at pitch line (matches belt)\n  const toothDepth = 0.75;    // radial tooth height\n  const PLDoffset = 0.254;   // Gates GT2 PLD offset: PD - OD\n\n  const pitchR = (N * pitch) / (2 * Math.PI);  // pitch radius\n  const tipR = pitchR - PLDoffset / 2;       // pulley OD/2 (top of teeth)\n  const rootR = tipR - toothDepth;            // valley between teeth\n  if (rootR <= 0.1) throw new Error(\"Too few teeth for this pulley size\");\n\n  const alphaHalf = (toothWidth / 2) / pitchR; // angular half-width of tooth\n  const toothAngle = (2 * Math.PI) / N;\n  const toothSteps = 16;\n  const gapSteps = 6;\n\n  const pts: [number, number][] = [];\n\n  for (let i = 0; i < N; i++) {\n    const phiC = i * toothAngle;\n\n    // Tooth bump: half-ellipse in polar coords, parameter t ∈ [0, π].\n    //   φ(t) = φc − αhalf · cos t      (sweeps angularly across the tooth)\n    //   r(t) = rootR + depth · sin t   (rises from root to tip and back)\n    for (let s = 0; s <= toothSteps; s++) {\n      const t = Math.PI * (s / toothSteps);\n      const phi = phiC - alphaHalf * Math.cos(t);\n      const r = rootR + toothDepth * Math.sin(t);\n      pts.push([r * Math.cos(phi), r * Math.sin(phi)]);\n    }\n\n    // Gap arc on the root circle to the next tooth (interior points only).\n    const gapStart = phiC + alphaHalf;\n    const gapEnd = phiC + toothAngle - alphaHalf;\n    for (let s = 1; s < gapSteps; s++) {\n      const phi = gapStart + (gapEnd - gapStart) * (s / gapSteps);\n      pts.push([rootR * Math.cos(phi), rootR * Math.sin(phi)]);\n    }\n  }\n\n  let pen = replicad.draw(pts[0]);\n  for (let i = 1; i < pts.length; i++) pen = pen.lineTo(pts[i]);\n  const crossSection = pen.close();\n\n  return crossSection.sketchOnPlane().extrude(faceWidth);\n}",
+      "compiledCode": "\"use strict\";\n/**\n * 2GT (GT2) timing belt pulley.\n * Teeth point outward; profile is the complement of the GT2 belt tooth so\n * the belt's gaps mesh onto the pulley's tips. Uses Gates' standard PLD\n * offset (PD = OD + 0.254 mm) so the pulley meshes correctly with a real\n * 2GT belt.\n */\nfunction run(numberOfTeeth = 20, faceWidth = 6) {\n    const N = Math.max(8, Math.round(numberOfTeeth));\n    const pitch = 2.0; // GT2 tooth pitch\n    const toothWidth = 1.15; // chord width at pitch line (matches belt)\n    const toothDepth = 0.75; // radial tooth height\n    const PLDoffset = 0.254; // Gates GT2 PLD offset: PD - OD\n    const pitchR = (N * pitch) / (2 * Math.PI); // pitch radius\n    const tipR = pitchR - PLDoffset / 2; // pulley OD/2 (top of teeth)\n    const rootR = tipR - toothDepth; // valley between teeth\n    if (rootR <= 0.1)\n        throw new Error(\"Too few teeth for this pulley size\");\n    const alphaHalf = (toothWidth / 2) / pitchR; // angular half-width of tooth\n    const toothAngle = (2 * Math.PI) / N;\n    const toothSteps = 16;\n    const gapSteps = 6;\n    const pts = [];\n    for (let i = 0; i < N; i++) {\n        const phiC = i * toothAngle;\n        // Tooth bump: half-ellipse in polar coords, parameter t ∈ [0, π].\n        //   φ(t) = φc − αhalf · cos t      (sweeps angularly across the tooth)\n        //   r(t) = rootR + depth · sin t   (rises from root to tip and back)\n        for (let s = 0; s <= toothSteps; s++) {\n            const t = Math.PI * (s / toothSteps);\n            const phi = phiC - alphaHalf * Math.cos(t);\n            const r = rootR + toothDepth * Math.sin(t);\n            pts.push([r * Math.cos(phi), r * Math.sin(phi)]);\n        }\n        // Gap arc on the root circle to the next tooth (interior points only).\n        const gapStart = phiC + alphaHalf;\n        const gapEnd = phiC + toothAngle - alphaHalf;\n        for (let s = 1; s < gapSteps; s++) {\n            const phi = gapStart + (gapEnd - gapStart) * (s / gapSteps);\n            pts.push([rootR * Math.cos(phi), rootR * Math.sin(phi)]);\n        }\n    }\n    let pen = replicad.draw(pts[0]);\n    for (let i = 1; i < pts.length; i++)\n        pen = pen.lineTo(pts[i]);\n    const crossSection = pen.close();\n    return crossSection.sketchOnPlane().extrude(faceWidth);\n}\n"
+    },
+    {
+      "atomType": "Input",
+      "x": 0.025384615384615384,
+      "y": 0.40111420612813375,
+      "uniqueID": "id-771",
+      "name": "Number_of_Teeth"
+    },
+    {
+      "atomType": "Input",
+      "x": 0.025384615384615384,
+      "y": 0.67966573816156,
+      "uniqueID": "id-774",
+      "name": "Height"
+    }
+  ],
+  "allConnectors": [
+    {
+      "ap2Name": "number or geometry",
+      "ap1ID": "id-764",
+      "ap2ID": "id-762"
+    },
+    {
+      "ap2Name": "numberOfTeeth",
+      "ap1ID": "id-771",
+      "ap2ID": "id-764"
+    },
+    {
+      "ap2Name": "faceWidth",
+      "ap1ID": "id-774",
+      "ap2ID": "id-764"
+    }
+  ],
+  "unitsKey": "MM",
+  "fileTypeVersion": 1,
+  "filetypeVersion": 1
 }
