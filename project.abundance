@@ -7,13 +7,11 @@
   "ioValues": [
     {
       "name": "Number_of_Teeth",
-      "ioValue": 20,
-      "currentEquation": "20"
+      "ioValue": 20
     },
     {
       "name": "Height",
-      "ioValue": 5,
-      "currentEquation": "5"
+      "ioValue": 5
     }
   ],
   "topLevel": true,
@@ -32,8 +30,8 @@
     },
     {
       "atomType": "Code",
-      "x": 0.4212962962962963,
-      "y": 0.5376044568245125,
+      "x": 0.44576719576719576,
+      "y": 0.39275766016713093,
       "uniqueID": "id-764",
       "ioValues": [
         {
@@ -42,8 +40,7 @@
         },
         {
           "name": "faceWidth",
-          "ioValue": 5,
-          "currentEquation": "6"
+          "ioValue": 5
         }
       ],
       "interpreterVersion": 1,
@@ -53,16 +50,35 @@
     {
       "atomType": "Input",
       "x": 0.025384615384615384,
-      "y": 0.40111420612813375,
+      "y": 0.15384615384615385,
       "uniqueID": "id-771",
       "name": "Number_of_Teeth"
     },
     {
       "atomType": "Input",
       "x": 0.025384615384615384,
-      "y": 0.67966573816156,
+      "y": 0.24615384615384617,
       "uniqueID": "id-774",
       "name": "Height"
+    },
+    {
+      "atomType": "Code",
+      "x": 0.39153439153439157,
+      "y": 0.7298050139275767,
+      "uniqueID": "id-785",
+      "ioValues": [
+        {
+          "name": "numberOfTeeth",
+          "ioValue": 20
+        },
+        {
+          "name": "faceWidth",
+          "ioValue": 6
+        }
+      ],
+      "interpreterVersion": 1,
+      "code": "/**\n * 2GT (GT2) timing-belt pulley — corrected geometry.\n *\n * Real GT2 pulleys are essentially a disc at OD with rounded valleys cut\n * into the rim where belt teeth fit. The previous version had this inverted\n * (rounded bumps protruding from a root cylinder), and also placed OD at\n * pitchR − PLD/2 instead of the correct pitchR − PLD.\n *\n *   PD  = N · 2 / π\n *   OD  = PD − 2·PLD              (PLD = 0.254 mm for 2GT)\n *   tipR  = pitchR − PLD          (where the pulley teeth tops live)\n *   rootR = tipR − toothDepth     (where the belt teeth tips bottom out)\n *\n * Tooth/valley angular widths around the pitch circle:\n *   pulley tooth (at OD) = pitch − beltToothWidth\n *   valley       (dip)   = beltToothWidth\n * so the belt's tooth chord matches the angular width of the pulley valley.\n */\nfunction run(numberOfTeeth: number = 20, faceWidth: number = 6) {\n  const N = Math.max(8, Math.round(numberOfTeeth));\n  const pitch = 2.0;\n  const beltToothWidth = 1.15;   // chord width of belt tooth at pitch line\n  const toothDepth = 0.75;\n  const PLDoffset = 0.254;  // radial distance: pitch line → pulley OD\n\n  const pitchR = (N * pitch) / (2 * Math.PI);\n  const tipR = pitchR - PLDoffset;       // pulley OD / 2\n  const rootR = tipR - toothDepth;        // valley bottom\n\n  const pitchAngle = (2 * Math.PI) / N;\n  const valleyHalfAngle = (beltToothWidth / 2) / pitchR;\n  const toothHalfAngle = pitchAngle / 2 - valleyHalfAngle;\n\n  // Half-ellipse parametrization for the valley dip (t ∈ [0, π]):\n  //   φ(t) = valleyCenter − valleyHalfAngle · cos t\n  //   r(t) = tipR − toothDepth · sin t\n  const VALLEY_SPLINES = 3;\n\n  const valleyPt = (t: number, valleyCenter: number): [number, number] => {\n    const phi = valleyCenter - valleyHalfAngle * Math.cos(t);\n    const r = tipR - toothDepth * Math.sin(t);\n    return [r * Math.cos(phi), r * Math.sin(phi)];\n  };\n  const valleyTan = (t: number, valleyCenter: number): [number, number] => {\n    const phi = valleyCenter - valleyHalfAngle * Math.cos(t);\n    const r = tipR - toothDepth * Math.sin(t);\n    const dr = -toothDepth * Math.cos(t);\n    const dphi = valleyHalfAngle * Math.sin(t);\n    const dx = dr * Math.cos(phi) - r * Math.sin(phi) * dphi;\n    const dy = dr * Math.sin(phi) + r * Math.cos(phi) * dphi;\n    const len = Math.hypot(dx, dy) || 1;\n    return [dx / len, dy / len];\n  };\n\n  const samples: number[] = [];\n  for (let s = 0; s <= VALLEY_SPLINES; s++) samples.push(Math.PI * (s / VALLEY_SPLINES));\n\n  // Start at tooth 0's LEFT edge on OD, walk CCW.\n  const startPhi = -toothHalfAngle;\n  let pen = replicad.draw([tipR * Math.cos(startPhi), tipR * Math.sin(startPhi)]);\n\n  for (let i = 0; i < N; i++) {\n    const phiC = i * pitchAngle;\n    const toothRight = phiC + toothHalfAngle;\n    const valleyCenter = toothRight + valleyHalfAngle;\n\n    // ── Pulley tooth top: real circular arc on OD from toothLeft to toothRight ──\n    pen = pen.threePointsArcTo(\n      [tipR * Math.cos(toothRight), tipR * Math.sin(toothRight)],\n      [tipR * Math.cos(phiC), tipR * Math.sin(phiC)],\n    );\n\n    // ── Valley dip: half-ellipse via VALLEY_SPLINES sub-splines ──\n    for (let s = 1; s <= VALLEY_SPLINES; s++) {\n      const tA = samples[s - 1], tB = samples[s];\n      pen = pen.smoothSplineTo(valleyPt(tB, valleyCenter), {\n        startTangent: valleyTan(tA, valleyCenter),\n        endTangent: valleyTan(tB, valleyCenter),\n      });\n    }\n  }\n\n  const drawing = pen.close();\n  return drawing.sketchOnPlane().extrude(faceWidth);\n}",
+      "compiledCode": "\"use strict\";\n/**\n * 2GT (GT2) timing-belt pulley — corrected geometry.\n *\n * Real GT2 pulleys are essentially a disc at OD with rounded valleys cut\n * into the rim where belt teeth fit. The previous version had this inverted\n * (rounded bumps protruding from a root cylinder), and also placed OD at\n * pitchR − PLD/2 instead of the correct pitchR − PLD.\n *\n *   PD  = N · 2 / π\n *   OD  = PD − 2·PLD              (PLD = 0.254 mm for 2GT)\n *   tipR  = pitchR − PLD          (where the pulley teeth tops live)\n *   rootR = tipR − toothDepth     (where the belt teeth tips bottom out)\n *\n * Tooth/valley angular widths around the pitch circle:\n *   pulley tooth (at OD) = pitch − beltToothWidth\n *   valley       (dip)   = beltToothWidth\n * so the belt's tooth chord matches the angular width of the pulley valley.\n */\nfunction run(numberOfTeeth = 20, faceWidth = 6) {\n    const N = Math.max(8, Math.round(numberOfTeeth));\n    const pitch = 2.0;\n    const beltToothWidth = 1.15; // chord width of belt tooth at pitch line\n    const toothDepth = 0.75;\n    const PLDoffset = 0.254; // radial distance: pitch line → pulley OD\n    const pitchR = (N * pitch) / (2 * Math.PI);\n    const tipR = pitchR - PLDoffset; // pulley OD / 2\n    const rootR = tipR - toothDepth; // valley bottom\n    const pitchAngle = (2 * Math.PI) / N;\n    const valleyHalfAngle = (beltToothWidth / 2) / pitchR;\n    const toothHalfAngle = pitchAngle / 2 - valleyHalfAngle;\n    // Half-ellipse parametrization for the valley dip (t ∈ [0, π]):\n    //   φ(t) = valleyCenter − valleyHalfAngle · cos t\n    //   r(t) = tipR − toothDepth · sin t\n    const VALLEY_SPLINES = 3;\n    const valleyPt = (t, valleyCenter) => {\n        const phi = valleyCenter - valleyHalfAngle * Math.cos(t);\n        const r = tipR - toothDepth * Math.sin(t);\n        return [r * Math.cos(phi), r * Math.sin(phi)];\n    };\n    const valleyTan = (t, valleyCenter) => {\n        const phi = valleyCenter - valleyHalfAngle * Math.cos(t);\n        const r = tipR - toothDepth * Math.sin(t);\n        const dr = -toothDepth * Math.cos(t);\n        const dphi = valleyHalfAngle * Math.sin(t);\n        const dx = dr * Math.cos(phi) - r * Math.sin(phi) * dphi;\n        const dy = dr * Math.sin(phi) + r * Math.cos(phi) * dphi;\n        const len = Math.hypot(dx, dy) || 1;\n        return [dx / len, dy / len];\n    };\n    const samples = [];\n    for (let s = 0; s <= VALLEY_SPLINES; s++)\n        samples.push(Math.PI * (s / VALLEY_SPLINES));\n    // Start at tooth 0's LEFT edge on OD, walk CCW.\n    const startPhi = -toothHalfAngle;\n    let pen = replicad.draw([tipR * Math.cos(startPhi), tipR * Math.sin(startPhi)]);\n    for (let i = 0; i < N; i++) {\n        const phiC = i * pitchAngle;\n        const toothRight = phiC + toothHalfAngle;\n        const valleyCenter = toothRight + valleyHalfAngle;\n        // ── Pulley tooth top: real circular arc on OD from toothLeft to toothRight ──\n        pen = pen.threePointsArcTo([tipR * Math.cos(toothRight), tipR * Math.sin(toothRight)], [tipR * Math.cos(phiC), tipR * Math.sin(phiC)]);\n        // ── Valley dip: half-ellipse via VALLEY_SPLINES sub-splines ──\n        for (let s = 1; s <= VALLEY_SPLINES; s++) {\n            const tA = samples[s - 1], tB = samples[s];\n            pen = pen.smoothSplineTo(valleyPt(tB, valleyCenter), {\n                startTangent: valleyTan(tA, valleyCenter),\n                endTangent: valleyTan(tB, valleyCenter),\n            });\n        }\n    }\n    const drawing = pen.close();\n    return drawing.sketchOnPlane().extrude(faceWidth);\n}\n"
     }
   ],
   "allConnectors": [
